@@ -1,5 +1,17 @@
 name = "lampa-sync"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
-# Bind a KV namespace named BACKUPS in the Cloudflare dashboard.
-# Add API_KEY, BOT_TOKEN, CHAT_ID as Worker secrets.
+
+# Bindings already configured in Cloudflare dashboard.
+[[kv_namespaces]]
+binding = "BACKUPS"
+id = "17c5349da82744e3b15d71af7c149363"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lampa-sync-users"
+database_id = "edbf3409-e937-4f15-808c-638bfc36ad10"
+
+# Secrets configured in Cloudflare dashboard:
+# BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
+# Never commit secret values or deploy the legacy v1 Worker for public use.
