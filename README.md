@@ -25,3 +25,10 @@ Encrypted manual export/import of selected Lampa localStorage settings on LG web
 - This version has no automatic sync, device pairing, rollback, or conflict resolution.
 - Import overwrites matching localStorage keys after confirmation; create a separate backup before testing.
 - WebOS WebCrypto and Lampa SettingsApi compatibility have not yet been verified on the user's TV.
+
+
+## Public multi-user deployment (planned; NOT implemented)
+
+The current v1 Worker uses a single shared API key and chat ID. **Do not publish that key or offer v1 as a multi-user service.** It has no per-user authentication or ownership enforcement.
+
+For v2, implement Telegram webhook authentication with one-time device pairing, per-user sessions and storage authorization, server-side rate limiting, encryption before upload, and a recovery strategy. Do not send all users' backups into a shared chat. Existing v1 code must be replaced and security-tested before public rollout.
