@@ -15,7 +15,7 @@ async function authorized(request,env){
 export default {
  async fetch(request,env){
   try{
-   if(request.method==="OPTIONS")return json({},204);
+   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"GET,POST,PUT,OPTIONS"}});
    if(!env.DB||!env.BACKUPS||!env.BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET)return json({error:"Server not configured"},503);
    const path=new URL(request.url).pathname;
    if(path==="/health"&&request.method==="GET")return json({ok:true,version:2});
@@ -25,7 +25,7 @@ export default {
     const msg=update.message;
     if(!msg||msg.chat?.type!=="private"||!Number.isSafeInteger(msg.from?.id))return json({ok:true});
     const text=String(msg.text||"").trim();
-    const match=text.match(/^\/start(?:\s+([A-F0-9]{8}))?$/i);
+    const match=text.match(/^\/start(?:\s+([A-F0-9]{16}))?$/i);
     if(!match)return json({ok:true});
     if(!match[1]){await telegram(env,msg.chat.id,"Откройте Lampa Sync на телевизоре, получите код подключения и отправьте /start КОД");return json({ok:true});}
     const code=match[1].toUpperCase();
@@ -42,11 +42,12 @@ export default {
     return json({ok:true});
    }
    if(path==="/pair/start"&&request.method==="POST"){
+    // A 64-bit one-time code reduces guessing risk; enforce platform rate limits before launch.
     const raw=await request.text();if(raw.length>1024)return json({error:"Too large"},413);
     const body=JSON.parse(raw||"{}");
     const deviceName=String(body.name||"Lampa device").slice(0,80);
     const deviceToken=random(32);
-    const code=random(4).toUpperCase();
+    const code=random(8).toUpperCase();
     const codeHash=await digest(code),tokenHash=await digest(deviceToken);
     const expires=Math.floor(Date.now()/1000)+600;
     await env.DB.prepare("INSERT INTO pairing_codes(code_hash,expires_at) VALUES (?,?)").bind(codeHash,expires).run();
