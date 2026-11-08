@@ -19,6 +19,24 @@ export default {
    if(!env.DB||!env.BACKUPS||!env.BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET)return json({error:"Server not configured"},503);
    const path=new URL(request.url).pathname;
    if(path==="/health"&&request.method==="GET")return json({ok:true,version:2});
+   if(path==="/admin/register-webhook"&&request.method==="POST"){
+    // Administrative action: never expose the bot token or webhook secret to clients.
+    if(!env.ADMIN_SETUP_KEY)return json({error:"Admin setup not configured"},503);
+    const provided=(request.headers.get("authorization")||"").replace(/^Bearer /,"");
+    const enc=new TextEncoder();
+    const a=enc.encode(provided),b=enc.encode(env.ADMIN_SETUP_KEY);
+    if(a.length!==b.length)return json({error:"Unauthorized"},401);
+    let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
+    if(diff!==0)return json({error:"Unauthorized"},401);
+    const webhookUrl=new URL("/telegram/webhook",request.url).toString();
+    const result=await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/setWebhook",{
+     method:"POST",headers:{"content-type":"application/json"},
+     body:JSON.stringify({url:webhookUrl,secret_token:env.TELEGRAM_WEBHOOK_SECRET,allowed_updates:["message"],drop_pending_updates:false})
+    });
+    const answer=await result.json();
+    return json({ok:result.ok&&answer.ok===true,description:answer.description||null},result.ok&&answer.ok?200:502);
+   }
+
    if(path==="/telegram/webhook"&&request.method==="POST"){
     if(request.headers.get("X-Telegram-Bot-Api-Secret-Token")!==env.TELEGRAM_WEBHOOK_SECRET)return json({error:"Unauthorized"},401);
     const update=await request.json();
