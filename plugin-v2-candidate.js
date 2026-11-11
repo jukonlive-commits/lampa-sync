@@ -4,8 +4,7 @@
   if (window.LampaSyncV2Candidate) return;
   window.LampaSyncV2Candidate = true;
   var prefix = 'lampa_sync_v2_';
-  // Set only for an isolated test Worker. Never point this candidate at production.
-  var base = '';
+  var base = 'https://lampa-sync.jukonlive.workers.dev';
   function note(text) { if (window.Lampa && Lampa.Noty) Lampa.Noty.show(text); else alert(text); }
   function get(k) { return localStorage.getItem(prefix + k) || ''; }
   function set(k, v) { localStorage.setItem(prefix + k, v); }
