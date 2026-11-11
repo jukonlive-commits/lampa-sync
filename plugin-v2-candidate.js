@@ -28,11 +28,13 @@
     return JSON.parse(new TextDecoder().decode(plain));
   }
   function password() { var p = prompt('Введите общий пароль шифрования (не менее 12 символов)'); if (!p || p.length < 12) throw Error('Нужен пароль от 12 символов'); return p; }
-  async function request(path, method, data, auth) {
+  async function request(path, method, data, auth, signal) {
     if (!/^https:\/\//.test(base)) throw Error('Тестовый сервер не настроен');
     var headers = { 'content-type': 'application/json' };
     if (auth) headers.authorization = 'Bearer ' + auth;
-    var r = await fetch(base + path, { method: method, headers: headers, body: data ? JSON.stringify(data) : undefined });
+    var options = { method: method, headers: headers, body: data ? JSON.stringify(data) : undefined };
+    if (signal) options.signal = signal;
+    var r = await fetch(base + path, options);
     if (path === '/backup' && method === 'GET' && r.status === 404) return null;
     if (!r.ok) { if (r.status === 409) throw Error('Копия изменилась на другом устройстве. Сначала восстановите актуальную копию.'); throw Error('Ошибка сервера: ' + r.status); }
     return r.json();
@@ -40,7 +42,20 @@
   async function pair() {
     check();
     note('Получаю код подключения…');
-    var result = await request('/pair/start', 'POST', { name: 'Телевизор' });
+    var controller = typeof window.AbortController === 'function' ? new window.AbortController() : null;
+    var timer;
+    var deadline = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        reject(Error('Сервер не ответил за 15 секунд. Попробуйте подключиться снова.'));
+        if (controller) controller.abort();
+      }, 15000);
+    });
+    var result;
+    try {
+      result = await Promise.race([request('/pair/start', 'POST', { name: 'Телевизор' }, null, controller && controller.signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
     if (!/^[A-F0-9]{24}$/.test(result.code) || !/^[a-f0-9]{64}$/.test(result.device_token)) throw Error('Сервер вернул неверный код подключения');
     set('pending', result.device_token);
     var command = '/start ' + result.code;
@@ -118,7 +133,7 @@
   function run(fn) { Promise.resolve().then(fn).catch(function (e) { note('Lampa Sync: ' + e.message); }); }
   function init() {
     if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent || !Lampa.SettingsApi.addParam) { setTimeout(init, 1000); return; }
-    Lampa.SettingsApi.addComponent({ component: 'lampa_sync_v2', name: 'Lampa Sync (тест)', icon: 'sync' });
+    Lampa.SettingsApi.addComponent({ component: 'lampa_sync_v2', name: 'Lampa Sync 2.0', icon: 'sync' });
     [['pair', 'Подключить устройство', pair], ['finish', 'Проверить подключение', finish], ['backup', 'Сохранить копию', backup], ['restore', 'Восстановить копию', restore]].forEach(function (x) {
       Lampa.SettingsApi.addParam({ component: 'lampa_sync_v2', param: { name: prefix + x[0], type: 'button' }, field: { name: x[1] }, onChange: function () { run(x[2]); } });
     });
