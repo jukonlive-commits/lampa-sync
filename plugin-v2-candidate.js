@@ -2494,6 +2494,29 @@ var qrcode = function() {
     poster_size: ['w200', 'w300', 'w500'],
     background_type: ['complex', 'simple', 'poster']
   };
+  var parserKeys = ['parser_use', 'parser_torrent_type', 'parser_use_link', 'jackett_url', 'jackett_url_two',
+    'jackett_key', 'jackett_key_two', 'jackett_interview', 'prowlarr_url', 'prowlarr_url_two',
+    'prowlarr_key', 'prowlarr_key_two', 'torrserver_search_type', 'parse_lang', 'parse_timeout', 'parse_in_search'];
+  var interfaceKeys = ['language', 'tmdb_lang', 'light_version', 'menu_always', 'background', 'black_style',
+    'glass_style', 'glass_opacity', 'card_interfice_poster', 'card_interfice_cover', 'card_interfice_reactions',
+    'interface_sound_play', 'interface_sound_level', 'animation', 'advanced_animation', 'mask', 'scroll_type'];
+  function pluginList(value) {
+    if (!Array.isArray(value) || value.length > 200) throw Error('Список расширений не поддерживается или слишком длинный');
+    return value.map(function (entry) {
+      var plugin = typeof entry === 'string' ? { url: entry, status: 1 } : entry;
+      if (!plugin || typeof plugin.url !== 'string' || plugin.url.length > 4096 ||
+          !/^https?:\/\/[^\s<>"']+$/i.test(plugin.url)) throw Error('В списке есть расширение с неподдерживаемым адресом');
+      var result = { url: plugin.url, status: Number(plugin.status) === 1 ? 1 : 0 };
+      if (typeof plugin.name === 'string') result.name = plugin.name.replace(/[<>]/g, '').slice(0, 256);
+      return result;
+    });
+  }
+  function allowed(name, value) {
+    if (Object.prototype.hasOwnProperty.call(fields, name)) return fields[name].indexOf(value) !== -1;
+    return (parserKeys.indexOf(name) !== -1 || interfaceKeys.indexOf(name) !== -1) &&
+      (typeof value === 'boolean' || (typeof value === 'number' && isFinite(value)) ||
+       (typeof value === 'string' && value.length <= 4096));
+  }
   function storage() {
     var api = Lampa.Storage;
     if (!api || typeof api.get !== 'function' || typeof api.set !== 'function') throw Error('Эта сборка Lampa не предоставляет доступ к настройкам');
@@ -2501,10 +2524,12 @@ var qrcode = function() {
   }
   function snapshot() {
     var api = storage(), settings = {};
-    Object.keys(fields).forEach(function (name) {
+    Object.keys(fields).concat(parserKeys, interfaceKeys).forEach(function (name) {
       var value = api.get(name, null);
-      if (fields[name].indexOf(value) !== -1) settings[name] = value;
+      if (allowed(name, value)) settings[name] = value;
     });
+    var plugins = api.get('plugins', null);
+    if (plugins !== null && plugins !== undefined) settings.plugins = pluginList(plugins);
     if (!Object.keys(settings).length) throw Error('Измените хотя бы одну поддерживаемую настройку интерфейса в Lampa');
     return { format: 'lampa-interface-v1', settings: settings };
   }
@@ -2512,7 +2537,8 @@ var qrcode = function() {
     if (!value || value.format !== 'lampa-interface-v1' || !value.settings || typeof value.settings !== 'object' || Array.isArray(value.settings)) throw Error('Неизвестный формат настроек');
     var names = Object.keys(value.settings);
     if (!names.length || names.some(function (name) {
-      return !Object.prototype.hasOwnProperty.call(fields, name) || fields[name].indexOf(value.settings[name]) === -1;
+      if (name === 'plugins') { pluginList(value.settings[name]); return false; }
+      return !allowed(name, value.settings[name]);
     })) throw Error('Копия содержит неподдерживаемые настройки');
     return names;
   }
@@ -2523,8 +2549,13 @@ var qrcode = function() {
     var p = await password();
     if (p === null) return;
     if (remote) validate(await open(remote.envelope, p));
+    var names = Object.keys(value.settings);
+    var labels = names.filter(function (name) { return Object.prototype.hasOwnProperty.call(fields, name); });
+    if (names.indexOf('plugins') !== -1) labels.push('plugins');
+    if (names.some(function (name) { return parserKeys.indexOf(name) !== -1; })) labels.push('parsers');
+    if (names.some(function (name) { return interfaceKeys.indexOf(name) !== -1; })) labels.push('interface');
     var result = await request('/backup', 'PUT', {
-      version: Number(version), envelope: await seal(value, p), fields: Object.keys(value.settings)
+      version: Number(version), envelope: await seal(value, p), fields: labels
     }, t);
     set('version', String(result.version)); note('Копия сохранена');
   }
@@ -2535,14 +2566,26 @@ var qrcode = function() {
     if (p === null) return;
     var value = await open(result.envelope, p);
     var names = validate(value), api = storage();
-    if (!await confirmRestore(names.length)) return;
-    names.forEach(function (name) { api.set(name, value.settings[name]); });
+    var includesPlugins = names.indexOf('plugins') !== -1;
+    var mergedPlugins;
+    if (includesPlugins) {
+      mergedPlugins = pluginList(value.settings.plugins);
+      var restoredUrls = mergedPlugins.map(function (entry) { return entry.url; });
+      var installed = api.get('plugins', []);
+      if (!Array.isArray(installed)) throw Error('Не удалось прочитать текущие расширения');
+      mergedPlugins = mergedPlugins.concat(installed.filter(function (entry) {
+        return restoredUrls.indexOf(typeof entry === 'string' ? entry : entry && entry.url) === -1;
+      }));
+    }
+    if (!await confirmRestore(names.length, includesPlugins)) return;
+    names.forEach(function (name) { api.set(name, name === 'plugins' ? mergedPlugins : value.settings[name]); });
     set('version', String(result.version));
     note('Настройки применены. Если интерфейс не обновился, перезапустите Lampa.');
   }
-  function confirmRestore(count) {
+  function confirmRestore(count, includesPlugins) {
+    var title = includesPlugins ? 'Восстановить настройки и расширения из доверенной копии?' : 'Применить настройки из копии?';
     if (!Lampa.Modal || typeof Lampa.Modal.open !== 'function' || typeof window.$ !== 'function') {
-      return Promise.resolve(window.confirm('Применить настройки из копии (' + count + ')?'));
+      return Promise.resolve(window.confirm(title));
     }
     return new Promise(function (resolve) {
       var content = window.$('<div></div>');
@@ -2555,7 +2598,7 @@ var qrcode = function() {
         resolve(accepted);
       }
       Lampa.Modal.open({
-        title: 'Применить настройки из копии?',
+        title: title,
         html: content,
         select: cancel[0],
         onBack: function () { close(false); },

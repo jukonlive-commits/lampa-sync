@@ -50,7 +50,10 @@ function equal(a, b) {
 const settingLabels = {
   interface_size: 'Размер интерфейса',
   poster_size: 'Качество постеров',
-  background_type: 'Тип фона'
+  background_type: 'Тип фона',
+  plugins: 'Установленные расширения',
+  parsers: 'Адреса и настройки парсеров',
+  interface: 'Другие настройки интерфейса'
 };
 async function notifyBackup(env, userId, fields, version) {
   if (!env.BOT_TOKEN) return;
