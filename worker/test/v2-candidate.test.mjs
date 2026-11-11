@@ -16,7 +16,9 @@ test('pairing replay, isolation, conditional updates and revocation', async () =
   const db = database(); db.sqlite.exec(await readFile(new URL('../migrations/0001_v2_candidate.sql', import.meta.url), 'utf8'));
   const env = { DB: db, TELEGRAM_WEBHOOK_SECRET: 'test-secret' };
   async function call(path, method = 'GET', value, token, extra = {}) {
-    const response = await worker.fetch(new Request('https://example.test' + path, { method, headers: { 'CF-Connecting-IP': '192.0.2.1', ...(token ? { authorization: 'Bearer ' + token } : {}), ...extra }, ...(value === undefined ? {} : { body: JSON.stringify(value) }) }), env);
+    const tasks = [];
+    const response = await worker.fetch(new Request('https://example.test' + path, { method, headers: { 'CF-Connecting-IP': '192.0.2.1', ...(token ? { authorization: 'Bearer ' + token } : {}), ...extra }, ...(value === undefined ? {} : { body: JSON.stringify(value) }) }), env, { waitUntil: task => tasks.push(task) });
+    await Promise.all(tasks);
     return { status: response.status, body: await response.json() };
   }
   async function pair(id) {
@@ -37,7 +39,18 @@ test('pairing replay, isolation, conditional updates and revocation', async () =
   assert.equal((await call('/backup', 'PUT', { version: 0, envelope }, a)).body.version, 1);
   assert.equal((await call('/backup', 'GET', undefined, b)).status, 404);
   assert.equal((await call('/backup', 'PUT', { version: 0, envelope }, a)).status, 409);
-  assert.equal((await call('/backup', 'PUT', { version: 1, envelope }, a)).body.version, 2);
+  const originalFetch = globalThis.fetch;
+  const notices = [];
+  env.BOT_TOKEN = 'test-bot';
+  globalThis.fetch = async (_url, options) => {
+    notices.push(JSON.parse(options.body));
+    return Response.json({ ok: true });
+  };
+  try {
+    assert.equal((await call('/backup', 'PUT', { version: 1, envelope, fields: ['interface_size', 'interface_size', 'unknown'] }, a)).body.version, 2);
+    assert.equal((await call('/backup', 'PUT', { version: 1, envelope, fields: ['interface_size'] }, a)).status, 409);
+    assert.deepEqual(notices, [{ chat_id: '1', text: 'Lampa Sync: копия №2 сохранена.\n\nВ копии:\n• Размер интерфейса' }]);
+  } finally { globalThis.fetch = originalFetch; }
   db.sqlite.exec('UPDATE ls_devices SET revoked=1 WHERE user_id=1');
   assert.equal((await call('/backup', 'GET', undefined, a)).status, 401);
   assert.equal((await call('/pair/complete', 'POST', undefined, a)).status, 410);

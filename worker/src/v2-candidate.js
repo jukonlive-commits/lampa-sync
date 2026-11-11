@@ -36,8 +36,25 @@ function equal(a, b) {
   const aa = enc.encode(a), bb = enc.encode(b); if (aa.length !== bb.length) return false;
   let diff = 0; for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i]; return diff === 0;
 }
+const settingLabels = {
+  interface_size: 'Размер интерфейса',
+  poster_size: 'Качество постеров',
+  background_type: 'Тип фона'
+};
+async function notifyBackup(env, userId, fields, version) {
+  if (!env.BOT_TOKEN) return;
+  const user = await env.DB.prepare('SELECT telegram_id FROM ls_users WHERE id=?').bind(userId).first();
+  if (!user) return;
+  const list = fields.map(field => '• ' + settingLabels[field]).join('\n');
+  const response = await fetch('https://api.telegram.org/bot' + env.BOT_TOKEN + '/sendMessage', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chat_id: user.telegram_id, text: 'Lampa Sync: копия №' + version + ' сохранена.\n\nВ копии:\n' + list })
+  });
+  if (!response.ok) console.warn('Backup notification was rejected', response.status);
+}
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     try {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(req.url).pathname;
@@ -95,12 +112,11 @@ export default {
         if (!Number.isSafeInteger(b.version) || b.version < 0 || !e || e.v !== 1 || !['salt','iv','data'].every(k => typeof e[k] === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(e[k]))) return reply({ error: 'invalid backup' }, 400);
         const result = await db.prepare('INSERT INTO ls_backups(user_id,version,envelope,updated) SELECT ?,1,?,? WHERE ?=0 ON CONFLICT(user_id) DO UPDATE SET version=ls_backups.version+1,envelope=excluded.envelope,updated=excluded.updated WHERE ls_backups.version=? RETURNING version').bind(device.user_id, JSON.stringify(e), now(), b.version, b.version).first();
         // For existing backups the INSERT SELECT above needs a row even for nonzero versions.
-        if (result) return reply({ version: result.version });
-        if (b.version > 0) {
-          const updated = await db.prepare('UPDATE ls_backups SET version=version+1,envelope=?,updated=? WHERE user_id=? AND version=? RETURNING version').bind(JSON.stringify(e), now(), device.user_id, b.version).first();
-          if (updated) return reply({ version: updated.version });
-        }
-        return reply({ error: 'conflict' }, 409);
+        const saved = result || (b.version > 0 && await db.prepare('UPDATE ls_backups SET version=version+1,envelope=?,updated=? WHERE user_id=? AND version=? RETURNING version').bind(JSON.stringify(e), now(), device.user_id, b.version).first());
+        if (!saved) return reply({ error: 'conflict' }, 409);
+        const fields = Array.isArray(b.fields) ? Object.keys(settingLabels).filter(field => b.fields.includes(field)) : [];
+        if (fields.length && ctx) ctx.waitUntil(notifyBackup(env, device.user_id, fields, saved.version).catch(() => console.warn('Backup notification failed')));
+        return reply({ version: saved.version });
       }
       return reply({ error: 'not found' }, 404);
     } catch (e) {

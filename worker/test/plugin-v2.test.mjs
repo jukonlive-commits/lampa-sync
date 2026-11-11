@@ -11,7 +11,8 @@ test('encrypted settings move between devices and stale writes are refused', asy
     if (options.method === 'GET') return remote ? Response.json(remote) : Response.json({}, { status: 404 });
     const data = JSON.parse(options.body);
     assert.equal(data.version, remote?.version ?? 0);
-    assert.equal(JSON.stringify(data).includes('interface_size'), false);
+    assert.deepEqual(data.fields, ['interface_size']);
+    assert.equal(JSON.stringify(data).includes('bigger'), false);
     remote = { version: data.version + 1, envelope: data.envelope };
     return Response.json({ version: remote.version });
   };

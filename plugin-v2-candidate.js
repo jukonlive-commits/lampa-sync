@@ -2462,7 +2462,9 @@ var qrcode = function() {
     if (remote && String(version) !== get('version')) throw Error('Сначала восстановите актуальную копию с сервера');
     var p = await password();
     if (remote) validate(await open(remote.envelope, p));
-    var result = await request('/backup', 'PUT', { version: Number(version), envelope: await seal(value, p) }, t);
+    var result = await request('/backup', 'PUT', {
+      version: Number(version), envelope: await seal(value, p), fields: Object.keys(value.settings)
+    }, t);
     set('version', String(result.version)); note('Копия сохранена');
   }
   async function restore() {
