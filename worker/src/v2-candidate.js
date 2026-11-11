@@ -6,6 +6,17 @@ const random = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 const hash = async s => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(s))));
 const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type', 'access-control-allow-methods': 'GET,POST,PUT,OPTIONS' };
 const reply = (v, status = 200) => new Response(JSON.stringify(v), { status, headers });
+const tvPlugin = 'https://cdn.jsdelivr.net/gh/jukonlive-commits/lampa-sync@462259588c4631dbbf2bb97d3a0a1df12f8bd707/plugin-v2-candidate.js';
+async function serveTvPlugin() {
+  const source = await fetch(tvPlugin, { redirect: 'error' });
+  if (!source.ok) return reply({ error: 'plugin unavailable' }, 502);
+  return new Response(source.body, { headers: {
+    'content-type': 'application/javascript; charset=utf-8',
+    'cache-control': 'public, max-age=300',
+    'access-control-allow-origin': '*',
+    'x-content-type-options': 'nosniff'
+  } });
+}
 const token = req => (req.headers.get('authorization') || '').match(/^Bearer ([a-f0-9]{64})$/)?.[1];
 async function body(req, max) {
   const reader = req.body && req.body.getReader();
@@ -58,6 +69,7 @@ export default {
     try {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(req.url).pathname;
+      if (path === '/tv.js' && req.method === 'GET') return await serveTvPlugin();
       if (path === '/health' && req.method === 'GET') return reply({ ok: true, version: '2-candidate' });
       if (!env.DB || !env.TELEGRAM_WEBHOOK_SECRET) return reply({ error: 'not configured' }, 503);
       const db = env.DB;
