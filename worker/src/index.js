@@ -28,7 +28,14 @@ export default {
     if(a.length!==b.length)return json({error:"Unauthorized"},401);
     let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
     if(diff!==0)return json({error:"Unauthorized"},401);
-    const webhookUrl=new URL("/telegram/webhook",request.url).toString();
+    // Do not derive the registered destination from a caller-controlled URL.
+    // Configure this exact public HTTPS endpoint explicitly in the Worker.
+    let webhookUrl;
+    try {
+     const configured=new URL(env.TELEGRAM_WEBHOOK_URL);
+     if(configured.protocol!=="https:"||configured.username||configured.password||configured.port||configured.pathname!=="/telegram/webhook"||configured.search||configured.hash)throw new Error("Invalid URL");
+     webhookUrl=configured.toString();
+    } catch (_) {return json({error:"Webhook URL not configured"},503);}
     const result=await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/setWebhook",{
      method:"POST",headers:{"content-type":"application/json"},
      body:JSON.stringify({url:webhookUrl,secret_token:env.TELEGRAM_WEBHOOK_SECRET,allowed_updates:["message"],drop_pending_updates:false})

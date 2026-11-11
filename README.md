@@ -1,5 +1,12 @@
 # Lampa Sync — experimental prototype
 
+> **Development status:** the v1 plugin below is incompatible with the v2 Worker.
+> Do not use this README as a v2 deployment guide or publish the prototype.
+> The intended shared bot is [@my_lampa_sync_bot](https://t.me/my_lampa_sync_bot).
+> The development version of webhook registration requires a non-secret
+> `TELEGRAM_WEBHOOK_URL` configuration value containing the complete trusted
+> HTTPS URL ending in `/telegram/webhook`. The production Worker is unchanged.
+
 Encrypted manual export/import of selected Lampa localStorage settings on LG webOS, using a Cloudflare Worker and Telegram archive.
 
 **Status: untested on LG C3. Do not delete your existing Lampa data.** This is not a complete or independently audited backup tool. Some Lampa state is outside localStorage; plugin tokens and keys with sensitive-looking names are excluded. Other sensitive values may still be present in the snapshot. Use a strong unique passphrase.
