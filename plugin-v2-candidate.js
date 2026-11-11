@@ -38,10 +38,28 @@
     return r.json();
   }
   async function pair() {
-    check(); var name = prompt('Название устройства', 'Телевизор'); if (name === null) return;
-    var result = await request('/pair/start', 'POST', { name: name });
+    check();
+    note('Получаю код подключения…');
+    var result = await request('/pair/start', 'POST', { name: 'Телевизор' });
+    if (!/^[A-F0-9]{24}$/.test(result.code) || !/^[a-f0-9]{64}$/.test(result.device_token)) throw Error('Сервер вернул неверный код подключения');
     set('pending', result.device_token);
-    alert('Откройте @my_lampa_sync_bot в Telegram и отправьте:\n/start ' + result.code + '\nЗатем выберите «Проверить подключение». Код действует 10 минут.');
+    var command = '/start ' + result.code;
+    if (!Lampa.Modal || typeof Lampa.Modal.open !== 'function' || typeof window.$ !== 'function') {
+      note('Отправьте @my_lampa_sync_bot: ' + command);
+      return;
+    }
+    var content = window.$('<div></div>');
+    content.append(window.$('<p></p>').text('Отправьте @my_lampa_sync_bot в Telegram:'));
+    content.append(window.$('<p></p>').text(command));
+    content.append(window.$('<p></p>').text('Код действует 10 минут. После отправки проверьте подключение.'));
+    function close() { Lampa.Modal.close(); }
+    Lampa.Modal.open({
+      title: 'Подключение Lampa Sync',
+      html: content,
+      size: 'medium',
+      onBack: close,
+      buttons: [{ name: 'Проверить подключение', onSelect: function () { close(); run(finish); } }]
+    });
   }
   async function finish() {
     check(); var pending = get('pending'); if (!pending) throw Error('Сначала начните подключение');
