@@ -37,19 +37,15 @@ test('encrypted settings move between devices and can be saved again without res
       $: element,
       localStorage: { getItem: k => local.get(k), setItem: (k, v) => local.set(k, v) },
       Lampa: {
+        Input: { edit(options, submit) {
+          assert.equal(options.keyboard, 'lampa');
+          assert.equal(options.password, true);
+          assert.equal(options.nosave, true);
+          submit('testpass');
+        } },
         Modal: {
           open(options) {
-            if (options.title === 'Пароль резервной копии') {
-              const [display, grid, controls] = options.html.children;
-              for (const character of 'testpass') {
-                options.onSelect(grid.children.find(item => item.label === character));
-              }
-              assert.match(display.label, /^(•{8})/);
-              assert.equal(display.label.includes('testpass'), false);
-              options.onSelect(controls.children.find(item => item.label === 'Готово'));
-            } else {
-              options.onSelect(options.html.children[0]);
-            }
+            options.onSelect(options.html.children[0]);
           },
           close() {}
         },

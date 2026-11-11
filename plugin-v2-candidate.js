@@ -2316,7 +2316,6 @@ var qrcode = function() {
     return JSON.parse(new TextDecoder().decode(plain));
   }
   function password() {
-    if (Lampa.Modal && typeof Lampa.Modal.open === 'function' && typeof window.$ === 'function') return modalPassword();
     if (!Lampa.Input || typeof Lampa.Input.edit !== 'function') throw Error('Эта сборка Lampa не поддерживает экранную клавиатуру');
     return new Promise(function (resolve, reject) {
       Lampa.Input.edit({
@@ -2332,65 +2331,6 @@ var qrcode = function() {
           return;
         }
         resolve(value);
-      });
-    });
-  }
-  function modalPassword() {
-    return new Promise(function (resolve) {
-      var content = window.$('<div></div>');
-      var display = window.$('<p></p>').css({ minHeight: '1.4em', overflowWrap: 'anywhere' });
-      var grid = window.$('<div></div>').css({ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: '0.2em' });
-      var rows = ['1234567890abcdefghijklmnopqrstuvwxyz', '1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ', '!@#$%^&*()-_=+[]{};:,.?/\\|~`"<>\''];
-      rows.push('абвгдеёжзийклмнопрстуфхцчшщъыьэюя', 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ');
-      var layout = 0, value = '', keys = [], closed = false;
-      function button(label, action, parent) {
-        var item = window.$('<div class="selector"></div>').text(label).css({
-          padding: '0.35em', textAlign: 'center', background: 'rgba(255,255,255,.16)', borderRadius: '0.2em'
-        });
-        item.data('syncAction', action);
-        parent.append(item);
-        return item;
-      }
-      function redraw() {
-        display.text(value ? Array(value.length + 1).join('•') + '  (' + value.length + ')' : 'Введите пароль от 8 символов');
-        keys.forEach(function (item, index) {
-          var character = rows[layout].charAt(index);
-          item.text(character || '·').data('syncCharacter', character);
-        });
-      }
-      function close(result) {
-        if (closed) return;
-        closed = true;
-        value = '';
-        Lampa.Modal.close();
-        if (Lampa.Controller && typeof Lampa.Controller.toggle === 'function') Lampa.Controller.toggle('settings_component');
-        resolve(result);
-      }
-      content.append(display, grid);
-      for (var i = 0; i < 36; i++) keys.push(button('', function (item) {
-        if (value.length < 128) value += item.data('syncCharacter');
-      }, grid));
-      var actions = window.$('<div></div>').css({ display: 'flex', gap: '0.25em', marginTop: '0.4em', flexWrap: 'wrap' });
-      content.append(actions);
-      button('Регистр / символы', function () { layout = (layout + 1) % rows.length; }, actions);
-      button('Пробел', function () { if (value.length < 128) value += ' '; }, actions);
-      button('Стереть', function () { value = value.slice(0, -1); }, actions);
-      button('Готово', function () {
-        if (value.length < 8) { note('Нужен пароль от 8 символов'); return; }
-        close(value);
-      }, actions);
-      redraw();
-      Lampa.Modal.open({
-        title: 'Пароль резервной копии',
-        html: content,
-        size: 'medium',
-        select: keys[0][0],
-        onBack: function () { close(null); },
-        onSelect: function (item) {
-          var action = item.data('syncAction');
-          if (typeof action === 'function') action(item);
-          if (!closed) redraw();
-        }
       });
     });
   }
