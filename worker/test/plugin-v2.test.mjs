@@ -20,9 +20,15 @@ test('encrypted settings move between devices and stale writes are refused', asy
     let report;
     const context = {
       crypto, fetch, TextEncoder, TextDecoder, atob, btoa, isSecureContext: true,
-      prompt: () => 'test passphrase only', confirm: () => true,
+      confirm: () => true,
       localStorage: { getItem: k => local.get(k), setItem: (k, v) => local.set(k, v) },
       Lampa: {
+        Input: { edit(options, submit) {
+          assert.equal(options.password, true);
+          assert.equal(options.nosave, true);
+          assert.equal(options.keyboard, 'lampa');
+          submit('testpass');
+        } },
         Noty: { show: value => report(value) },
         Storage: { get: k => settings[k], set: (k, v) => { settings[k] = v; } },
         SettingsApi: { addComponent() {}, addParam: x => { actions[x.param.name] = x.onChange; } }

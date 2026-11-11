@@ -2315,7 +2315,24 @@ var qrcode = function() {
     var plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: un64(envelope.iv) }, await key(password, un64(envelope.salt)), un64(envelope.data));
     return JSON.parse(new TextDecoder().decode(plain));
   }
-  function password() { var p = prompt('Введите общий пароль шифрования (не менее 12 символов)'); if (!p || p.length < 12) throw Error('Нужен пароль от 12 символов'); return p; }
+  function password() {
+    if (!Lampa.Input || typeof Lampa.Input.edit !== 'function') throw Error('Эта сборка Lampa не поддерживает экранную клавиатуру');
+    return new Promise(function (resolve, reject) {
+      Lampa.Input.edit({
+        title: 'Пароль копии (от 8 символов)',
+        value: '',
+        keyboard: 'lampa',
+        password: true,
+        nosave: true
+      }, function (value) {
+        if (typeof value !== 'string' || value.length < 8) {
+          reject(Error('Нужен пароль от 8 символов'));
+          return;
+        }
+        resolve(value);
+      });
+    });
+  }
   async function request(path, method, data, auth, signal) {
     if (!/^https:\/\//.test(base)) throw Error('Тестовый сервер не настроен');
     var headers = { 'content-type': 'application/json' };
@@ -2443,7 +2460,7 @@ var qrcode = function() {
     var remote = await request('/backup', 'GET', null, t);
     var version = remote ? remote.version : 0;
     if (remote && String(version) !== get('version')) throw Error('Сначала восстановите актуальную копию с сервера');
-    var p = password();
+    var p = await password();
     if (remote) validate(await open(remote.envelope, p));
     var result = await request('/backup', 'PUT', { version: Number(version), envelope: await seal(value, p) }, t);
     set('version', String(result.version)); note('Копия сохранена');
@@ -2451,7 +2468,7 @@ var qrcode = function() {
   async function restore() {
     check(); var result = await request('/backup', 'GET', null, token());
     if (!result) { note('Сохранённых копий пока нет'); return; }
-    var value = await open(result.envelope, password());
+    var value = await open(result.envelope, await password());
     var names = validate(value), api = storage();
     if (!confirm('Применить настройки интерфейса из копии (' + names.length + ')?')) return;
     names.forEach(function (name) { api.set(name, value.settings[name]); });
