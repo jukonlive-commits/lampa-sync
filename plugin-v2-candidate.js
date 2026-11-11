@@ -2323,7 +2323,8 @@ var qrcode = function() {
         value: '',
         keyboard: 'lampa',
         password: true,
-        nosave: true
+        nosave: true,
+        nomic: true
       }, function (value) {
         if (typeof value !== 'string' || value.length < 8) {
           reject(Error('Нужен пароль от 8 символов'));
@@ -2341,7 +2342,7 @@ var qrcode = function() {
     if (signal) options.signal = signal;
     var r = await fetch(base + path, options);
     if (path === '/backup' && method === 'GET' && r.status === 404) return null;
-    if (!r.ok) { if (r.status === 409) throw Error('Копия изменилась на другом устройстве. Сначала восстановите актуальную копию.'); throw Error('Ошибка сервера: ' + r.status); }
+    if (!r.ok) { if (r.status === 409) throw Error('Копия только что изменилась. Нажмите «Сохранить копию» ещё раз.'); throw Error('Ошибка сервера: ' + r.status); }
     return r.json();
   }
   async function pair() {
@@ -2459,7 +2460,6 @@ var qrcode = function() {
     check(); var t = token(), value = snapshot();
     var remote = await request('/backup', 'GET', null, t);
     var version = remote ? remote.version : 0;
-    if (remote && String(version) !== get('version')) throw Error('Сначала восстановите актуальную копию с сервера');
     var p = await password();
     if (remote) validate(await open(remote.envelope, p));
     var result = await request('/backup', 'PUT', {
@@ -2472,10 +2472,33 @@ var qrcode = function() {
     if (!result) { note('Сохранённых копий пока нет'); return; }
     var value = await open(result.envelope, await password());
     var names = validate(value), api = storage();
-    if (!confirm('Применить настройки интерфейса из копии (' + names.length + ')?')) return;
+    if (!await confirmRestore(names.length)) return;
     names.forEach(function (name) { api.set(name, value.settings[name]); });
     set('version', String(result.version));
     note('Настройки применены. Если интерфейс не обновился, перезапустите Lampa.');
+  }
+  function confirmRestore(count) {
+    if (!Lampa.Modal || typeof Lampa.Modal.open !== 'function' || typeof window.$ !== 'function') {
+      return Promise.resolve(window.confirm('Применить настройки из копии (' + count + ')?'));
+    }
+    return new Promise(function (resolve) {
+      var content = window.$('<div></div>');
+      var apply = window.$('<div class="settings-param selector"></div>').text('Восстановить настройки (' + count + ')');
+      var cancel = window.$('<div class="settings-param selector"></div>').text('Отмена');
+      content.append(apply, cancel);
+      function close(accepted) {
+        Lampa.Modal.close();
+        if (Lampa.Controller && typeof Lampa.Controller.toggle === 'function') Lampa.Controller.toggle('settings_component');
+        resolve(accepted);
+      }
+      Lampa.Modal.open({
+        title: 'Применить настройки из копии?',
+        html: content,
+        select: cancel[0],
+        onBack: function () { close(false); },
+        onSelect: function (item) { close(item[0] === apply[0]); }
+      });
+    });
   }
   function run(fn) { Promise.resolve().then(fn).catch(function (e) { note('Lampa Sync: ' + e.message); }); }
   function init() {
