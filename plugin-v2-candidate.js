@@ -2367,20 +2367,48 @@ var qrcode = function() {
     content.append(window.$('<p></p>').text('Команда для ручного ввода:'));
     content.append(window.$('<p></p>').text(command));
     content.append(window.$('<p></p>').text('Код действует 10 минут. После отправки проверьте подключение.'));
-    function close() { Lampa.Modal.close(); }
+    var action = window.$('<div class="settings-param selector"></div>').text('Проверить подключение');
+    content.append(action);
+    var closed = false, checking = false, nextCheck;
+    var expiresAt = Date.now() + 600000;
+    function close() {
+      if (closed) return;
+      closed = true;
+      clearTimeout(nextCheck);
+      Lampa.Modal.close();
+      if (Lampa.Controller && typeof Lampa.Controller.toggle === 'function') Lampa.Controller.toggle('settings_component');
+    }
+    async function verify(quiet) {
+      if (closed || checking) return;
+      clearTimeout(nextCheck);
+      checking = true;
+      try {
+        if (await finish(quiet)) close();
+      } catch (error) {
+        if (!quiet) note('Lampa Sync: ' + error.message);
+      } finally {
+        checking = false;
+        if (!closed && Date.now() < expiresAt) nextCheck = setTimeout(function () { verify(true); }, 4000);
+      }
+    }
     Lampa.Modal.open({
       title: 'Подключение Lampa Sync',
       html: content,
       size: 'medium',
+      select: action[0],
       onBack: close,
-      buttons: [{ name: 'Проверить подключение', onSelect: function () { close(); run(finish); } }]
+      onSelect: function (item) { if (item[0] === action[0]) verify(false); }
     });
+    nextCheck = setTimeout(function () { verify(true); }, 4000);
   }
-  async function finish() {
-    check(); var pending = get('pending'); if (!pending) throw Error('Сначала начните подключение');
+  async function finish(quiet) {
+    check(); var pending = get('pending');
+    if (!pending && get('token')) { if (!quiet) note('Устройство уже подключено'); return true; }
+    if (!pending) throw Error('Сначала начните подключение');
     var result = await request('/pair/complete', 'POST', null, pending);
-    if (!result.paired) { note('Ожидается подтверждение в Telegram'); return; }
+    if (!result.paired) { if (!quiet) note('Ожидается подтверждение в Telegram'); return false; }
     set('token', pending); localStorage.removeItem(prefix + 'pending'); localStorage.removeItem(prefix + 'version'); note('Устройство подключено');
+    return true;
   }
   function token() { var t = get('token'); if (!t) throw Error('Сначала подключите устройство'); return t; }
   var fields = {
