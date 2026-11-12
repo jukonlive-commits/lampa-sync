@@ -2297,7 +2297,10 @@ var qrcode = function() {
   function get(k) { return localStorage.getItem(prefix + k) || ''; }
   function set(k, v) { localStorage.setItem(prefix + k, v); }
   function check() {
-    if (!window.isSecureContext || !window.crypto || !crypto.subtle || !crypto.getRandomValues || !window.fetch || !window.TextEncoder || !window.TextDecoder) throw Error('Устройство не поддерживает необходимое безопасное шифрование.');
+    if (!window.isSecureContext) throw Error('Откройте Lampa по HTTPS. На телефоне можно открыть yumata.github.io/lampa в Chrome или Safari.');
+    if (!window.crypto || !crypto.subtle || !crypto.getRandomValues || !window.fetch || !window.TextEncoder || !window.TextDecoder) {
+      throw Error('Встроенный браузер не поддерживает шифрование. Откройте Lampa по HTTPS в Chrome или Safari.');
+    }
   }
   function b64(a) { var s = ''; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s); }
   function un64(s) { var x = atob(s), a = new Uint8Array(x.length); for (var i = 0; i < x.length; i++) a[i] = x.charCodeAt(i); return a; }
@@ -2364,14 +2367,18 @@ var qrcode = function() {
     if (!/^[A-F0-9]{24}$/.test(result.code) || !/^[a-f0-9]{64}$/.test(result.device_token)) throw Error('Сервер вернул неверный код подключения');
     set('pending', result.device_token);
     var command = '/start ' + result.code;
+    var telegramLink = 'https://t.me/my_lampa_sync_bot?start=' + result.code;
     if (!Lampa.Modal || typeof Lampa.Modal.open !== 'function' || typeof window.$ !== 'function') {
       note('Отправьте @my_lampa_sync_bot: ' + command);
       return;
     }
     var content = window.$('<div></div>');
+    content.append(window.$('<p></p>').append(window.$('<a></a>').attr({
+      href: telegramLink, target: '_blank', rel: 'noopener noreferrer'
+    }).text('Открыть Telegram на этом устройстве')));
     try {
       var qr = qrcode(0, 'M');
-      qr.addData('https://t.me/my_lampa_sync_bot?start=' + result.code);
+      qr.addData(telegramLink);
       qr.make();
       content.append(window.$('<img>').attr({
         src: qr.createDataURL(8, 32),
