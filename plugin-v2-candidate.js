@@ -2321,7 +2321,6 @@ var qrcode = function() {
       Lampa.Input.edit({
         title: 'Пароль копии (от 8 символов)',
         value: '',
-        keyboard: 'lampa',
         password: true,
         nosave: true,
         nomic: true
@@ -2484,9 +2483,9 @@ var qrcode = function() {
   }
   async function backup() {
     check(); var t = token(), value = snapshot();
+    var p = await password();
     var remote = await request('/backup', 'GET', null, t);
     var version = remote ? remote.version : 0;
-    var p = await password();
     if (p === null) return;
     if (remote) validate(await open(remote.envelope, p));
     var names = Object.keys(value.settings);
@@ -2500,9 +2499,10 @@ var qrcode = function() {
     set('version', String(result.version)); note('Копия сохранена');
   }
   async function restore() {
-    check(); var result = await request('/backup', 'GET', null, token());
-    if (!result) { note('Сохранённых копий пока нет'); return; }
+    check(); var t = token();
     var p = await password();
+    var result = await request('/backup', 'GET', null, t);
+    if (!result) { note('Сохранённых копий пока нет'); return; }
     if (p === null) return;
     var value = await open(result.envelope, p);
     var names = validate(value), api = storage();
@@ -2546,7 +2546,11 @@ var qrcode = function() {
       });
     });
   }
-  function run(fn) { Promise.resolve().then(fn).catch(function (e) { note('Lampa Sync: ' + e.message); }); }
+  function run(fn) {
+    try { Promise.resolve(fn()).catch(reportError); }
+    catch (error) { reportError(error); }
+  }
+  function reportError(error) { note('Lampa Sync: ' + error.message); }
   function init() {
     if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent || !Lampa.SettingsApi.addParam) { setTimeout(init, 1000); return; }
     Lampa.SettingsApi.addComponent({ component: 'lampa_sync_v2', name: 'Lampa Sync 2.0', icon: 'sync' });
