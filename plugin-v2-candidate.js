@@ -2292,6 +2292,7 @@ var qrcode = function() {
   if (window.LampaSyncV2Candidate) return;
   window.LampaSyncV2Candidate = true;
   var prefix = 'lampa_sync_v2_';
+  var botUrl = 'https://t.me/my_lampa_sync_bot';
   var base = 'https://lampa-sync.jukonlive.workers.dev';
   function note(text) { if (window.Lampa && Lampa.Noty) Lampa.Noty.show(text); else alert(text); }
   function get(k) { return localStorage.getItem(prefix + k) || ''; }
@@ -2367,7 +2368,7 @@ var qrcode = function() {
     if (!/^[A-F0-9]{24}$/.test(result.code) || !/^[a-f0-9]{64}$/.test(result.device_token)) throw Error('Сервер вернул неверный код подключения');
     set('pending', result.device_token);
     var command = '/start ' + result.code;
-    var telegramLink = 'https://t.me/my_lampa_sync_bot?start=' + result.code;
+    var telegramLink = botUrl + '?start=' + result.code;
     if (!Lampa.Modal || typeof Lampa.Modal.open !== 'function' || typeof window.$ !== 'function') {
       note('Отправьте @my_lampa_sync_bot: ' + command);
       return;
@@ -2558,10 +2559,17 @@ var qrcode = function() {
     catch (error) { reportError(error); }
   }
   function reportError(error) { note('Lampa Sync: ' + error.message); }
+  function openBot() {
+    window.location.assign(botUrl);
+  }
   function init() {
     if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent || !Lampa.SettingsApi.addParam) { setTimeout(init, 1000); return; }
     Lampa.SettingsApi.addComponent({ component: 'lampa_sync_v2', name: 'Lampa Sync 2.0', icon: 'sync' });
-    [['pair', 'Подключить устройство', pair], ['finish', 'Проверить подключение', finish], ['backup', 'Сохранить копию', backup], ['restore', 'Восстановить копию', restore]].forEach(function (x) {
+    var actions = [['pair', 'Подключить устройство', pair], ['finish', 'Проверить подключение', finish], ['backup', 'Сохранить копию', backup], ['restore', 'Восстановить копию', restore]];
+    if (Lampa.Platform && typeof Lampa.Platform.screen === 'function' && Lampa.Platform.screen('mobile')) {
+      actions.unshift(['telegram', 'Открыть бота в Telegram', openBot]);
+    }
+    actions.forEach(function (x) {
       Lampa.SettingsApi.addParam({ component: 'lampa_sync_v2', param: { name: prefix + x[0], type: 'button' }, field: { name: x[1] }, onChange: function () { run(x[2]); } });
     });
   }
