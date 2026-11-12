@@ -2374,9 +2374,13 @@ var qrcode = function() {
       return;
     }
     var content = window.$('<div></div>');
-    content.append(window.$('<p></p>').append(window.$('<a></a>').attr({
+    var telegramAnchor = window.$('<a></a>').attr({
       href: telegramLink, target: '_blank', rel: 'noopener noreferrer'
-    }).text('Открыть Telegram на этом устройстве')));
+    }).text('Открыть Telegram на этом устройстве');
+    telegramAnchor.on('click', function (event) {
+      if (openAndroidTelegram(result.code)) event.preventDefault();
+    });
+    content.append(window.$('<p></p>').append(telegramAnchor));
     try {
       var qr = qrcode(0, 'M');
       qr.addData(telegramLink);
@@ -2560,7 +2564,21 @@ var qrcode = function() {
   }
   function reportError(error) { note('Lampa Sync: ' + error.message); }
   function openBot() {
+    if (openAndroidTelegram()) return;
     window.location.assign(botUrl);
+  }
+  function openAndroidTelegram(code) {
+    var bridge = window.AndroidJS;
+    if (bridge && typeof bridge.openBrowser === 'function') {
+      bridge.openBrowser('tg://resolve?domain=my_lampa_sync_bot' + (code ? '&start=' + encodeURIComponent(code) : ''));
+      return true;
+    }
+    var agent = window.navigator && window.navigator.userAgent || '';
+    if (/Android/i.test(agent) && (/\bwv\b/i.test(agent) || /lampa_client/i.test(agent))) {
+      note(code ? 'Откройте @my_lampa_sync_bot в Telegram и отправьте /start ' + code : 'Откройте Telegram и найдите @my_lampa_sync_bot');
+      return true;
+    }
+    return false;
   }
   function init() {
     if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent || !Lampa.SettingsApi.addParam) { setTimeout(init, 1000); return; }
